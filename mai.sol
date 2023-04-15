@@ -2,95 +2,87 @@
 
 pragma solidity ^0.8.0;
 
-import "./IERC20.sol";
-import "./SafeMath.sol";
-import "./Address.sol";
-import "./Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract MyToken is IERC20, Ownable {
     using SafeMath for uint256;
-    using Address for address;
 
-    mapping (address => uint256) private _rOwned;
-    mapping (address => uint256) private _tOwned;
-    mapping (address => mapping (address => uint256)) private _allowances;
+    string private constant _name = "My Token";
+    string private constant _symbol = "MTK";
+    uint8 private constant _decimals = 18;
+    uint256 private constant _totalSupply = 1000000000 * 10 ** 18;
+    
+    mapping(address => uint256) private _balances;
+    mapping(address => mapping(address => uint256)) private _allowances;
 
-    mapping (address => bool) private _isExcludedFromFee;
-
-    mapping (address => bool) private _isExcluded;
-    address[] private _excluded;
-
-    uint256 private constant MAX = ~uint256(0);
-    uint256 private _tTotal = 1000000000 * 10**6 * 10**9;
-    uint256 private _rTotal = (MAX - (MAX % _tTotal));
-    uint256 private _tFeeTotal;
-
-    string private _name = "My Token";
-    string private _symbol = "MYT";
-    uint8 private _decimals = 9;
-
-    uint256 public _taxFee = 9;
-    uint256 private _previousTaxFee = _taxFee;
-
-    uint256 public _liquidityFee = 1;
-    uint256 private _previousLiquidityFee = _liquidityFee;
-
-    uint256 public _maxTxAmount = 5000000 * 10**6 * 10**9;
-    uint256 private minimumTokensBeforeSwap = 200000 * 10**6 * 10**9;
-
-    address public uniswapV2Router;
-    address public uniswapPair;
-
-    bool inSwapAndLiquify;
-    bool public swapAndLiquifyEnabled = true;
-
-    event SwapAndLiquifyEnabledUpdated(bool enabled);
-
-    modifier lockTheSwap {
-        inSwapAndLiquify = true;
-        _;
-        inSwapAndLiquify = false;
+    constructor() {
+        _balances[msg.sender] = _totalSupply;
+        emit Transfer(address(0), msg.sender, _totalSupply);
     }
 
-    constructor () {
-        _rOwned[_msgSender()] = _rTotal;
-
-        // PancakeSwap Router Testnet: 0xD99D1c33F9fC3444f8101754aBC46c52416550D1
-        // PancakeSwap Router Mainnet: 0x10ED43C718714eb63d5aA57B78B54704E256024E
-        // uniswapV2Router = YOUR_ROUTER_ADDRESS;
-        // Set the router address when deploying to a network
-        uniswapPair = address(0);
-
-        _isExcludedFromFee[owner()] = true;
-        _isExcludedFromFee[address(this)] = true;
-
-        emit Transfer(address(0), _msgSender(), _tTotal);
-    }
-
-    function name() public view returns (string memory) {
+    function name() public pure returns (string memory) {
         return _name;
     }
 
-    function symbol() public view returns (string memory) {
+    function symbol() public pure returns (string memory) {
         return _symbol;
     }
 
-    function decimals() public view returns (uint8) {
+    function decimals() public pure returns (uint8) {
         return _decimals;
     }
 
-    function totalSupply() public view override returns (uint256) {
-        return _tTotal;
+    function totalSupply() public pure override returns (uint256) {
+        return _totalSupply;
     }
 
     function balanceOf(address account) public view override returns (uint256) {
-        if (_isExcluded[account]) return _tOwned[account];
-        return tokenFromReflection(_rOwned[account]);
+        return _balances[account];
     }
 
     function transfer(address recipient, uint256 amount) public override returns (bool) {
-        _transfer(_msgSender(), recipient, amount);
+        _transfer(msg.sender, recipient, amount);
         return true;
     }
 
-   
+    function allowance(address owner, address spender) public view override returns (uint256) {
+        return _allowances[owner][spender];
+    }
+
+    function approve(address spender, uint256 amount) public override returns (bool) {
+        _approve(msg.sender, spender, amount);
+        return true;
+    }
+
+    function transferFrom(address sender, address recipient, uint256 amount) public override returns (bool) {
+        _transfer(sender, recipient, amount);
+        _approve(sender, msg.sender, _allowances[sender][msg.sender].sub(amount, "ERC20: transfer amount exceeds allowance"));
+        return true;
+    }
+
+    function increaseAllowance(address spender, uint256 addedValue) public returns (bool) {
+        _approve(msg.sender, spender, _allowances[msg.sender][spender].add(addedValue));
+        return true;
+    }
+
+    function decreaseAllowance(address spender, uint256 subtractedValue) public returns (bool) {
+        _approve(msg.sender, spender, _allowances[msg.sender][spender].sub(subtractedValue, "ERC20: decreased allowance below zero"));
+        return true;
+    }
+
+    function _transfer(address sender, address recipient, uint256 amount) internal {
+        require(sender != address(0), "ERC20: transfer from the zero address");
+        require(recipient != address(0), "ERC20: transfer to the zero address");
+        require(amount > 0, "ERC20: transfer amount must be greater than zero");
+
+        uint256 senderBalance = _balances[sender];
+        require(senderBalance >= amount, "ERC20: transfer amount exceeds balance");
+
+        _balances[sender] = senderBalance.sub(amount);
+        _balances[recipient] = _balances[recipient].add(amount);
+
+        emit Transfer(sender, recipient, amount);
+    }
+}
